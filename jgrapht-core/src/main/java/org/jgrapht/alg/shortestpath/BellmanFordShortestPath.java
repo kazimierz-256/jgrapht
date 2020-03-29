@@ -126,6 +126,7 @@ public class BellmanFordShortestPath<V, E>
         int n = graph.vertexSet().size();
         Map<V, Double> distance = new HashMap<>();
         Map<V, E> pred = new HashMap<>();
+        Map<V, E> recent_update = new HashMap<>();
         for (V v : graph.vertexSet()) {
             distance.put(v, Double.POSITIVE_INFINITY);
         }
@@ -153,6 +154,31 @@ public class BellmanFordShortestPath<V, E>
                     V u = Graphs.getOppositeVertex(graph, e, v);
                     double newDist = distance.get(v) + graph.getEdgeWeight(e);
                     if (comparator.compare(newDist, distance.get(u)) < 0) {
+                        // In this conditional branch we are updating u, if it happens
+                        // that some earlier change was also due to node u it
+                        // necessarily implies the existence of a negative cycle since
+                        // after the update node u would lie on the update path twice
+                        // The history path is stored up to one of the source nodes,
+                        // therefore v is always in recent_update
+                        E recent_update_v = recent_update.get(v);
+                        if (recent_update_v != null && (graph.getEdgeSource(recent_update_v).equals(u)
+                                || graph.getEdgeTarget(recent_update_v).equals(u))) {
+                            // TODO: resolve the following inconsistency:
+                            // No longer guarantees to find the entire cycle, but rather find the existence of the cycle
+                            throw new NegativeCycleDetectedException(
+                                    GRAPH_CONTAINS_A_NEGATIVE_WEIGHT_CYCLE);
+                        }
+
+                        // Transfer the earliest changing edge from the update path
+                        // if the same source vertex is responsible for the update
+                        // If the source node is responsible for the cost update,
+                        // then clear the history and use it instead
+                        E pred_u_edge = pred.get(u);
+                        if (pred_u_edge != null && graph.getEdgeSource(pred_u_edge).equals(v))
+                            recent_update.put(u, recent_update.get(v));
+                        else
+                            recent_update.put(u, e);
+
                         distance.put(u, newDist);
                         pred.put(u, e);
                         nextVertexSet.add(u);
